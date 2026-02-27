@@ -9,6 +9,7 @@ const showModal = ref(false)
 const editingTask = ref(null)
 
 const filters = ref({ status: '', priority: '', search: '' })
+const currentPage = ref(1)
 
 onMounted(async () => {
   await taskStore.fetchTasks()
@@ -19,9 +20,15 @@ let searchTimeout = null
 watch(filters, () => {
   clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => {
-    taskStore.fetchTasks(filters.value)
+    currentPage.value = 1
+    taskStore.fetchTasks(filters.value, 1)
   }, 300)
 }, { deep: true })
+
+function goToPage(page) {
+  currentPage.value = page
+  taskStore.fetchTasks(filters.value, page)
+}
 
 function openCreate() {
   editingTask.value = null
@@ -41,12 +48,12 @@ async function handleDelete(id) {
 
 async function quickStatusChange(task, newStatus) {
   await taskStore.updateTask(task.id, { status: newStatus })
-  taskStore.fetchTasks(filters.value)
+  taskStore.fetchTasks(filters.value, currentPage.value)
 }
 
 function onSaved() {
   showModal.value = false
-  taskStore.fetchTasks(filters.value)
+  taskStore.fetchTasks(filters.value, currentPage.value)
 }
 
 function statusBadge(status) {
@@ -79,7 +86,7 @@ function priorityDot(priority) {
     <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
       <div>
         <h1 class="text-3xl font-bold text-gray-800">Tasks</h1>
-        <p class="text-gray-500 text-sm mt-1">{{ taskStore.tasks.length }} task(s) found</p>
+        <p class="text-gray-500 text-sm mt-1">{{ taskStore.pagination.total }} task(s) found</p>
       </div>
       <button
         @click="openCreate"
@@ -199,6 +206,38 @@ function priorityDot(priority) {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="taskStore.pagination.last_page > 1" class="flex items-center justify-center gap-2 mt-6">
+      <button
+        @click="goToPage(currentPage - 1)"
+        :disabled="currentPage === 1"
+        class="px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 cursor-pointer transition"
+      >
+        Previous
+      </button>
+      <template v-for="page in taskStore.pagination.last_page" :key="page">
+        <button
+          v-if="page === 1 || page === taskStore.pagination.last_page || (page >= currentPage - 1 && page <= currentPage + 1)"
+          @click="goToPage(page)"
+          :class="page === currentPage ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 hover:bg-gray-50'"
+          class="w-10 h-10 rounded-lg border text-sm font-medium cursor-pointer transition"
+        >
+          {{ page }}
+        </button>
+        <span
+          v-else-if="page === currentPage - 2 || page === currentPage + 2"
+          class="text-gray-400"
+        >...</span>
+      </template>
+      <button
+        @click="goToPage(currentPage + 1)"
+        :disabled="currentPage === taskStore.pagination.last_page"
+        class="px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 cursor-pointer transition"
+      >
+        Next
+      </button>
     </div>
 
     <TaskModal v-if="showModal" :task="editingTask" @close="showModal = false" @saved="onSaved" />

@@ -27,16 +27,18 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchProfile() {
     const response = await api.get('/profile')
-    user.value = response.data
-    localStorage.setItem('user', JSON.stringify(response.data))
-    return response.data
+    const userData = response.data.data
+    user.value = userData
+    localStorage.setItem('user', JSON.stringify(userData))
+    return userData
   }
 
   async function updateProfile(data) {
     const response = await api.put('/profile', data)
-    user.value = response.data
-    localStorage.setItem('user', JSON.stringify(response.data))
-    return response.data
+    const userData = response.data.data
+    user.value = userData
+    localStorage.setItem('user', JSON.stringify(userData))
+    return userData
   }
 
   function setAuth(data) {

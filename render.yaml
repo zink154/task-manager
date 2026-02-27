@@ -52,3 +52,5 @@ services:
         value: file
       - key: QUEUE_CONNECTION
         value: sync
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://task-manager-csvq.onrender.com

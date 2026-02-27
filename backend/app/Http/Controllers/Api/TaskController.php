@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\TaskResource;
 use App\Models\Task;
 use Illuminate\Http\Request;
 
@@ -28,9 +29,9 @@ class TaskController extends Controller
             $query->where('title', 'like', '%' . $request->search . '%');
         }
 
-        $tasks = $query->orderBy('created_at', 'desc')->get();
+        $tasks = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 15));
 
-        return response()->json($tasks);
+        return TaskResource::collection($tasks);
     }
 
     public function store(Request $request)
@@ -56,7 +57,7 @@ class TaskController extends Controller
 
         $task->load(['user', 'assignee']);
 
-        return response()->json($task, 201);
+        return new TaskResource($task);
     }
 
     public function show(Task $task, Request $request)
@@ -67,7 +68,7 @@ class TaskController extends Controller
 
         $task->load(['user', 'assignee']);
 
-        return response()->json($task);
+        return new TaskResource($task);
     }
 
     public function update(Request $request, Task $task)
@@ -91,7 +92,7 @@ class TaskController extends Controller
 
         $task->load(['user', 'assignee']);
 
-        return response()->json($task);
+        return new TaskResource($task);
     }
 
     public function destroy(Task $task, Request $request)
@@ -109,12 +110,14 @@ class TaskController extends Controller
     {
         $userId = $request->user()->id;
 
-        $stats = [
-            'total' => Task::where('user_id', $userId)->orWhere('assigned_to', $userId)->count(),
-            'pending' => Task::where(fn($q) => $q->where('user_id', $userId)->orWhere('assigned_to', $userId))->where('status', 'pending')->count(),
-            'in_progress' => Task::where(fn($q) => $q->where('user_id', $userId)->orWhere('assigned_to', $userId))->where('status', 'in_progress')->count(),
-            'completed' => Task::where(fn($q) => $q->where('user_id', $userId)->orWhere('assigned_to', $userId))->where('status', 'completed')->count(),
-        ];
+        $counts = Task::where(fn($q) => $q->where('user_id', $userId)->orWhere('assigned_to', $userId))
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+            ")
+            ->first();
 
         $recentTasks = Task::with(['user', 'assignee'])
             ->where(fn($q) => $q->where('user_id', $userId)->orWhere('assigned_to', $userId))
@@ -123,8 +126,13 @@ class TaskController extends Controller
             ->get();
 
         return response()->json([
-            'stats' => $stats,
-            'recent_tasks' => $recentTasks,
+            'stats' => [
+                'total' => (int) $counts->total,
+                'pending' => (int) $counts->pending,
+                'in_progress' => (int) $counts->in_progress,
+                'completed' => (int) $counts->completed,
+            ],
+            'recent_tasks' => TaskResource::collection($recentTasks),
         ]);
     }
 
